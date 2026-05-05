@@ -1,0 +1,47 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+
+# ── Build outputs ─────────────────────────────────────────────
+dist/
+build/
+.output/
+
+# ── Environment / secrets ─────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Editor / OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+
+# ── Test / coverage ───────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── TypeScript ────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Claude Code local settings ────────────────────────────────
+.claude/settings.local.json
+
+# ── PHP / Symfony ─────────────────────────────────────────────
+/backend/vendor/
+/backend/var/
+/backend/.env.local
+/backend/.env.*.local
+
+# ── Terraform ─────────────────────────────────────────────────
+/infrastructure/.terraform/
+/infrastructure/*.tfstate
+/infrastructure/*.tfstate.backup
+/infrastructure/*.tfvars
+/infrastructure/.terraform.lock.hcl
+
+# ── Lambda build artefacts ────────────────────────────────────
+/lambdas/dist/
+/lambdas/node_modules/

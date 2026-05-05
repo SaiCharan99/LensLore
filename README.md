@@ -1,0 +1,177 @@
+# LensLore
+
+A personal photo storytelling app for nature photographers. Upload a photograph, write a few lines about where you were and what you were feeling, and LensLore generates a cinematic, literary, full-page story experience where the photo's actual colours bleed outward across the screen.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Aurelia 2 Frontend                        │
+│  Journal → Albums → Album Detail → Cinematic Story Page       │
+└─────────────────────────┬────────────────────────────────────┘
+                          │ HTTPS (JSON)
+┌─────────────────────────▼────────────────────────────────────┐
+│                     Symfony 6 API                             │
+│  POST /api/photos   GET /api/albums   POST /api/albums/{id}   │
+└──────────┬───────────────────────────────────┬───────────────┘
+           │ AWS SDK                           │ Doctrine ORM
+┌──────────▼──────────┐          ┌─────────────▼──────────────┐
+│   AWS Lambda (TS)   │          │   PostgreSQL on RDS         │
+│  story-generator    │          │   Albums, Photos, Stories   │
+│  go-deeper-chat     │          └────────────────────────────┘
+└──────────┬──────────┘
+           │ Anthropic SDK
+┌──────────▼──────────┐          ┌───────────────────────────┐
+│   Claude Sonnet 4   │          │   AWS S3                  │
+│   Vision + Text     │          │   Image Storage            │
+└─────────────────────┘          └───────────────────────────┘
+                                 ┌───────────────────────────┐
+                                 │   CloudFront CDN           │
+                                 │   Image Delivery           │
+                                 └───────────────────────────┘
+```
+
+---
+
+## Repository Structure
+
+```
+/lenslore
+├── frontend/          Aurelia 2 + TypeScript — all four screens
+├── backend/           Symfony 6 + PHP 8 API
+├── lambdas/           TypeScript Lambda functions (story gen, chat)
+├── infrastructure/    Terraform — S3, RDS, Lambda, CloudFront, IAM
+├── docs/              Architecture decisions
+└── README.md          This file
+```
+
+---
+
+## Screens
+
+| Screen | Route | Description |
+|--------|-------|-------------|
+| Journal (Upload) | `/` | Drag-and-drop upload + reflective note input |
+| Albums | `/albums` | Stacked photo-pile cards, hover tilt-spread |
+| Album Detail | `/albums/:id` | Photo thumbnail grid |
+| Cinematic Story | overlay | AI-designed full-page spread with image-colour bleed |
+
+---
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- PHP 8.2+, Composer
+- AWS CLI + credentials configured
+- Terraform 1.9+
+
+---
+
+### Frontend (`/frontend`)
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:3000
+npm run build        # production build → dist/
+npm test             # Vitest (21 tests)
+npm run coverage     # coverage report
+```
+
+The frontend runs fully on seeded demo data before the backend is wired — all four screens are navigable out of the box.
+
+---
+
+### Backend (`/backend`) — Phase 2
+
+```bash
+cd backend
+composer install
+cp .env.example .env   # fill in DB + AWS credentials
+php bin/console doctrine:migrations:migrate
+symfony serve          # http://localhost:8000
+php bin/phpunit        # PHPUnit suite
+```
+
+---
+
+### Lambdas (`/lambdas`) — Phase 3
+
+```bash
+cd lambdas
+npm install
+npm run build          # esbuild → dist/
+npm test               # Vitest
+```
+
+Deploy via Terraform (see below). The Lambda functions require `ANTHROPIC_API_KEY` set in the Lambda environment.
+
+---
+
+### Infrastructure (`/infrastructure`) — Phase 4
+
+```bash
+cd infrastructure
+terraform init
+terraform workspace select dev   # or prod
+terraform plan
+terraform apply
+```
+
+Outputs: S3 bucket name, RDS endpoint, Lambda ARNs, CloudFront domain.
+
+---
+
+## Image-colour Bleed Effect
+
+The signature visual feature on the cinematic story page and fullscreen photo view:
+
+- A blurred, upscaled copy of the same image is absolutely positioned behind the original
+- `filter: blur(60px) saturate(1.35) brightness(0.85)` extends the photo's actual colours outward
+- A soft `radial-gradient` vignette fades the bleed into the dark page background
+- Canvas-based dominant-colour sampling (`src/services/image-colors.ts`) derives the page background from the photo's own pixel data
+
+`prefers-reduced-motion` is respected: all animations are disabled and elements remain at full opacity.
+
+---
+
+## Lambda Contract
+
+**Input (story-generator)**
+
+```json
+{
+  "imageBase64": "...",
+  "userNote": "Standing on the ridge above Torridon...",
+  "mood": "contemplative"
+}
+```
+
+**Output**
+
+```json
+{
+  "narrative": "...",
+  "captionCleaned": "...",
+  "palette": { "primary": "#hex", "accent": "#hex", "text": "#hex", "background": "#hex" },
+  "layoutStyle": "atmospheric",
+  "decorativeMotifs": ["horizon-rule", "rain-streaks"],
+  "fontPairing": { "display": "Playfair Display", "body": "EB Garamond" }
+}
+```
+
+---
+
+## Quality
+
+- TypeScript strict mode, zero `any` types
+- PHPStan level 8 (backend)
+- All tests written alongside features, not after
+- All AWS resources defined in Terraform — nothing created via console
+- `prefers-reduced-motion` respected throughout
+- Text contrast: warm cream at 78% opacity minimum on dark backgrounds
+- Semantic HTML, accessible markup
