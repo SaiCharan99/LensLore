@@ -2,6 +2,15 @@
 
 A personal photo storytelling app for nature photographers. Upload a photograph, write a few lines about where you were and what you were feeling, and LensLore generates a cinematic, literary, full-page story experience where the photo's actual colours bleed outward across the screen.
 
+
+---
+
+## Screenshots
+
+![alt text](screenshots/Landing.png)
+![alt text](screenshots/Albums.png)
+
+
 ---
 
 ## Architecture
