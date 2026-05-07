@@ -1,0 +1,16 @@
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Local-only variable files. Committed env/ tfvars are dev/prod presets;
+# anything ending in .local.tfvars is for the operator's machine.
+*.local.tfvars

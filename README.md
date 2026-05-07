@@ -125,13 +125,14 @@ Deploy via Terraform (see below). The Lambda functions require `ANTHROPIC_API_KE
 
 ```bash
 cd infrastructure
+./bootstrap.sh                              # one-time: creates the Terraform state bucket
 terraform init
-terraform workspace select dev   # or prod
-terraform plan
-terraform apply
+terraform workspace new dev                 # or `select dev` if it already exists
+terraform plan -var-file=env/dev.tfvars
+terraform apply -var-file=env/dev.tfvars
 ```
 
-Outputs: S3 bucket name, RDS endpoint, Lambda ARNs, CloudFront domain.
+Outputs: S3 bucket name, RDS endpoint, Lambda ARNs, CloudFront domain. Pass `TF_VAR_anthropic_api_key=sk-ant-…` to populate the Lambda secret at apply time. See [`infrastructure/README.md`](infrastructure/README.md) for the full operator guide.
 
 ---
 
@@ -150,7 +151,7 @@ The signature visual feature on the cinematic story page and fullscreen photo vi
 
 ## Lambda Contract
 
-**Input (story-generator)**
+**story-generator — input**
 
 ```json
 {
@@ -160,17 +161,38 @@ The signature visual feature on the cinematic story page and fullscreen photo vi
 }
 ```
 
-**Output**
+**story-generator — output (`DesignSpec`, matches the frontend interface field-for-field)**
 
 ```json
 {
-  "narrative": "...",
-  "captionCleaned": "...",
-  "palette": { "primary": "#hex", "accent": "#hex", "text": "#hex", "background": "#hex" },
-  "layoutStyle": "atmospheric",
-  "decorativeMotifs": ["horizon-rule", "rain-streaks"],
-  "fontPairing": { "display": "Playfair Display", "body": "EB Garamond" }
+  "palette": {
+    "bg": "#1a1f2e",
+    "fg": "#F5EFE4",
+    "accent": "#7a9fc4",
+    "muted": "rgba(245,239,228,0.78)"
+  },
+  "layout": "centered-stacked",
+  "headingFont": "Playfair Display",
+  "motif": "horizon-rule",
+  "title": "The Ridge at Dawn",
+  "caption": "Cloud inversion below, silence above.",
+  "mood": "contemplative"
 }
+```
+
+**go-deeper — input / output**
+
+```json
+// input
+{
+  "photoId": "abc123",
+  "photoContext": { "title": "...", "caption": "...", "mood": "...", "note": "..." },
+  "conversationHistory": [{ "role": "user", "content": "..." }],
+  "newMessage": "Tell me what you see in the silence."
+}
+
+// output
+{ "reply": "..." }
 ```
 
 ---
