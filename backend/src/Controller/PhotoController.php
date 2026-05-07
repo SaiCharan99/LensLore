@@ -149,16 +149,42 @@ final class PhotoController extends AbstractController
             return $this->validationError($errors);
         }
 
+        // Snapshot existing history BEFORE persisting the new user message,
+        // since `conversationHistory` does not include the message we're about to send.
+        $history = [];
+        foreach ($photo->getMessages() as $existing) {
+            $history[] = [
+                'role' => $existing->getRole(),
+                'content' => $existing->getContent(),
+            ];
+        }
+
         $userMsg = new Message($photo, Message::ROLE_USER, $dto->content);
         $this->em->persist($userMsg);
 
-        // In Phase 3 this will invoke Lambda with the conversation history.
-        // For now return a placeholder assistant response.
-        $assistantMsg = new Message(
-            $photo,
-            Message::ROLE_ASSISTANT,
-            'The story continues — Lambda integration arrives in Phase 3.',
-        );
+        $spec = $photo->getStorySpec();
+        $photoContext = $spec === null ? null : [
+            'title' => $spec->getTitle(),
+            'caption' => $spec->getCaption(),
+            'mood' => $spec->getMood(),
+            'note' => $photo->getNote(),
+        ];
+
+        try {
+            $reply = $this->lambda->continueConversation(
+                photoId: (string) $photo->getId(),
+                conversationHistory: $history,
+                newMessage: $dto->content,
+                photoContext: $photoContext,
+            );
+        } catch (\Throwable $e) {
+            return $this->json(
+                ['error' => 'Conversation generation failed: ' . $e->getMessage()],
+                Response::HTTP_BAD_GATEWAY,
+            );
+        }
+
+        $assistantMsg = new Message($photo, Message::ROLE_ASSISTANT, $reply);
         $this->em->persist($assistantMsg);
         $this->em->flush();
 

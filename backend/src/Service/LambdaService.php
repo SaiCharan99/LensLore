@@ -11,9 +11,15 @@ class LambdaService
 {
     private LambdaClient $client;
     private readonly string $storyArn;
+    private readonly string $goDeeperArn;
 
-    public function __construct(string $awsRegion, string $storyArn, string $awsKey = '', string $awsSecret = '')
-    {
+    public function __construct(
+        string $awsRegion,
+        string $storyArn,
+        string $goDeeperArn = '',
+        string $awsKey = '',
+        string $awsSecret = '',
+    ) {
         $config = [
             'version' => 'latest',
             'region' => $awsRegion,
@@ -28,6 +34,7 @@ class LambdaService
 
         $this->client = new LambdaClient($config);
         $this->storyArn = $storyArn;
+        $this->goDeeperArn = $goDeeperArn;
     }
 
     /**
@@ -35,9 +42,10 @@ class LambdaService
      */
     public function generateStory(string $imageBase64, string $note, string $mood): StorySpecResponse
     {
+        // The Lambda's input contract names this field `userNote` (see lambdas/src/story-generator/types.ts).
         $payload = json_encode([
             'imageBase64' => $imageBase64,
-            'note' => $note,
+            'userNote' => $note,
             'mood' => $mood,
         ]);
 
@@ -63,6 +71,58 @@ class LambdaService
         }
 
         return $this->parseStorySpec($data, $mood);
+    }
+
+    /**
+     * Invoke the go-deeper Lambda for a follow-up message about a photo.
+     *
+     * @param list<array{role: 'user'|'assistant', content: string}> $conversationHistory
+     * @param array{title?: string, caption?: string, mood?: string, note?: string}|null $photoContext
+     */
+    public function continueConversation(
+        string $photoId,
+        array $conversationHistory,
+        string $newMessage,
+        ?array $photoContext = null,
+    ): string {
+        if ($this->goDeeperArn === '') {
+            throw new \RuntimeException('go-deeper Lambda ARN is not configured (set LAMBDA_GO_DEEPER_ARN).');
+        }
+
+        $payload = json_encode([
+            'photoId' => $photoId,
+            'photoContext' => $photoContext ?? new \stdClass(),
+            'conversationHistory' => $conversationHistory,
+            'newMessage' => $newMessage,
+        ]);
+
+        if ($payload === false) {
+            throw new \RuntimeException('Failed to encode go-deeper payload.');
+        }
+
+        $result = $this->client->invoke([
+            'FunctionName' => $this->goDeeperArn,
+            'InvocationType' => 'RequestResponse',
+            'Payload' => $payload,
+        ]);
+
+        $responsePayload = (string) $result['Payload'];
+        $data = json_decode($responsePayload, true);
+
+        if (!is_array($data)) {
+            throw new \RuntimeException('go-deeper returned an invalid response.');
+        }
+
+        if (isset($data['errorMessage'])) {
+            throw new \RuntimeException('go-deeper error: ' . (string) $data['errorMessage']);
+        }
+
+        $reply = $data['reply'] ?? null;
+        if (!is_string($reply) || $reply === '') {
+            throw new \RuntimeException('go-deeper response missing "reply" string.');
+        }
+
+        return $reply;
     }
 
     /**

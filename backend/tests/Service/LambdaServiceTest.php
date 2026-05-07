@@ -92,4 +92,114 @@ final class LambdaServiceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $service->generateStory('base64data', 'note', 'mood');
     }
+
+    public function testGenerateStorySendsUserNoteFieldName(): void
+    {
+        // Regression test: the Lambda's input contract names this field `userNote`,
+        // not `note`. A mismatch would cause the Lambda's input validator to reject
+        // every photo upload.
+        $captured = null;
+
+        $clientMock = $this->createMock(LambdaClient::class);
+        $clientMock
+            ->expects(self::once())
+            ->method('__call')
+            ->willReturnCallback(function (string $method, array $args) use (&$captured): Result {
+                $captured = $args[0];
+
+                return new Result([
+                    'Payload' => json_encode([
+                        'palette' => ['bg' => '#000', 'fg' => '#fff', 'accent' => '#888', 'muted' => '#444'],
+                        'layout' => 'centered-stacked',
+                        'headingFont' => 'Playfair Display',
+                        'motif' => 'horizon-rule',
+                        'title' => 't',
+                        'caption' => 'c',
+                        'mood' => 'm',
+                    ]),
+                ]);
+            });
+
+        $service = new LambdaService('eu-west-1', 'arn:aws:lambda:eu-west-1:000:function:test');
+        $ref = new \ReflectionClass($service);
+        $prop = $ref->getProperty('client');
+        $prop->setValue($service, $clientMock);
+
+        $service->generateStory('imgdata', 'a heartfelt note about the ridge', 'contemplative');
+
+        self::assertIsArray($captured);
+        self::assertArrayHasKey('Payload', $captured);
+        $payload = json_decode($captured['Payload'], true);
+        self::assertIsArray($payload);
+        self::assertArrayHasKey('userNote', $payload, 'Symfony must send `userNote` to match the Lambda input contract.');
+        self::assertArrayNotHasKey('note', $payload);
+        self::assertSame('a heartfelt note about the ridge', $payload['userNote']);
+    }
+
+    public function testContinueConversationReturnsReply(): void
+    {
+        $service = $this->buildGoDeeperService(['reply' => 'The light at that hour does carry weight.']);
+
+        $reply = $service->continueConversation(
+            photoId: '42',
+            conversationHistory: [['role' => 'user', 'content' => 'I noticed the cloud line.']],
+            newMessage: 'Tell me more.',
+        );
+
+        self::assertSame('The light at that hour does carry weight.', $reply);
+    }
+
+    public function testContinueConversationThrowsWhenArnNotConfigured(): void
+    {
+        // Constructed with empty go-deeper ARN — must reject before any AWS call.
+        $service = new LambdaService('eu-west-1', 'arn:aws:lambda:eu-west-1:000:function:test');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/LAMBDA_GO_DEEPER_ARN/');
+
+        $service->continueConversation('1', [], 'hello');
+    }
+
+    public function testContinueConversationThrowsOnErrorResponse(): void
+    {
+        $service = $this->buildGoDeeperService(['errorMessage' => 'cold start failure']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/cold start failure/');
+
+        $service->continueConversation('1', [], 'hi');
+    }
+
+    public function testContinueConversationThrowsWhenReplyMissing(): void
+    {
+        $service = $this->buildGoDeeperService(['unrelated' => 'field']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/missing "reply"/');
+
+        $service->continueConversation('1', [], 'hi');
+    }
+
+    /**
+     * @param array<string, mixed> $lambdaPayload
+     */
+    private function buildGoDeeperService(array $lambdaPayload): LambdaService
+    {
+        $clientStub = $this->createStub(LambdaClient::class);
+        $clientStub
+            ->method('__call')
+            ->willReturn(new Result(['Payload' => json_encode($lambdaPayload)]));
+
+        $service = new LambdaService(
+            awsRegion: 'eu-west-1',
+            storyArn: 'arn:aws:lambda:eu-west-1:000:function:test',
+            goDeeperArn: 'arn:aws:lambda:eu-west-1:000:function:go-deeper-test',
+        );
+
+        $ref = new \ReflectionClass($service);
+        $prop = $ref->getProperty('client');
+        $prop->setValue($service, $clientStub);
+
+        return $service;
+    }
 }

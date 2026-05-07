@@ -50,8 +50,10 @@ class Message
         return $this->photo;
     }
 
+    /** @return self::ROLE_* */
     public function getRole(): string
     {
+        /** @var self::ROLE_* */
         return $this->role;
     }
 

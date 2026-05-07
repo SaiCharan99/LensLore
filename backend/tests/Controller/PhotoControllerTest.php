@@ -24,7 +24,8 @@ final class PhotoControllerTest extends WebTestCase
 
         static::getContainer()->set(S3Service::class, $s3);
 
-        // Lambda stub — returns a valid DesignSpec
+        // Lambda stub — returns a valid DesignSpec for story-generator,
+        // and a canned literary reply for go-deeper.
         $lambda = $this->createStub(LambdaService::class);
         $lambda->method('generateStory')->willReturn(
             new \App\DTO\StorySpecResponse(
@@ -37,6 +38,7 @@ final class PhotoControllerTest extends WebTestCase
                 mood: 'contemplative',
             )
         );
+        $lambda->method('continueConversation')->willReturn('A continuation that goes deeper.');
 
         static::getContainer()->set(LambdaService::class, $lambda);
     }
@@ -156,5 +158,39 @@ final class PhotoControllerTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+    }
+
+    public function testAddMessageInvokesGoDeeperLambdaAndReturnsBothMessages(): void
+    {
+        $client = static::createClient();
+        $client->disableReboot();
+        $this->mockAwsServices();
+
+        // Create album + photo so we have a target for the message
+        $client->request('POST', '/api/albums', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['title' => 'Test Album']) ?: '');
+        $album = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertIsArray($album);
+
+        $client->request('POST', '/api/photos', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([
+            'imageBase64' => base64_encode('fake-image-bytes'),
+            'note' => 'Standing on the ridge above Torridon at dawn.',
+            'mood' => 'contemplative',
+            'albumId' => (int) $album['id'],
+        ]) ?: '');
+        $photo = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertIsArray($photo);
+
+        // Send a follow-up message
+        $client->request('POST', sprintf('/api/photos/%d/messages', (int) $photo['id']), [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([
+            'content' => 'Tell me what you see in the silence.',
+        ]) ?: '');
+
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $body = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertIsArray($body);
+        self::assertSame('user', $body['user']['role']);
+        self::assertSame('Tell me what you see in the silence.', $body['user']['content']);
+        self::assertSame('assistant', $body['assistant']['role']);
+        self::assertSame('A continuation that goes deeper.', $body['assistant']['content']);
     }
 }

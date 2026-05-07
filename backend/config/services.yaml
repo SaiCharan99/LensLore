@@ -4,6 +4,7 @@ parameters:
     app.aws_key: '%env(default::AWS_ACCESS_KEY_ID)%'
     app.aws_secret: '%env(default::AWS_SECRET_ACCESS_KEY)%'
     app.lambda_story_arn: '%env(LAMBDA_STORY_ARN)%'
+    app.lambda_go_deeper_arn: '%env(default::LAMBDA_GO_DEEPER_ARN)%'
 
 services:
     _defaults:
@@ -29,5 +30,6 @@ services:
         arguments:
             $awsRegion: '%app.aws_region%'
             $storyArn: '%app.lambda_story_arn%'
+            $goDeeperArn: '%app.lambda_go_deeper_arn%'
             $awsKey: '%app.aws_key%'
             $awsSecret: '%app.aws_secret%'
