@@ -1,0 +1,33 @@
+parameters:
+    app.aws_region: '%env(AWS_REGION)%'
+    app.aws_bucket: '%env(AWS_S3_BUCKET)%'
+    app.aws_key: '%env(default::AWS_ACCESS_KEY_ID)%'
+    app.aws_secret: '%env(default::AWS_SECRET_ACCESS_KEY)%'
+    app.lambda_story_arn: '%env(LAMBDA_STORY_ARN)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+            - '../src/DTO/'
+
+    App\Service\S3Service:
+        arguments:
+            $awsRegion: '%app.aws_region%'
+            $awsBucket: '%app.aws_bucket%'
+            $awsKey: '%app.aws_key%'
+            $awsSecret: '%app.aws_secret%'
+
+    App\Service\LambdaService:
+        arguments:
+            $awsRegion: '%app.aws_region%'
+            $storyArn: '%app.lambda_story_arn%'
+            $awsKey: '%app.aws_key%'
+            $awsSecret: '%app.aws_secret%'

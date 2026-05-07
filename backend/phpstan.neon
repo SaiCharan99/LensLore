@@ -1,0 +1,11 @@
+includes:
+    - vendor/phpstan/phpstan-doctrine/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+    excludePaths:
+        - src/Kernel.php
+    doctrine:
+        objectManagerLoader: tests/bootstrap_doctrine.php
