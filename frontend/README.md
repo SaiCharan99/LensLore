@@ -32,11 +32,30 @@ npm run typecheck    # tsc --noEmit
 ```
 src/
 ├── main.ts                  Aurelia bootstrap
-├── app-root.{ts,html,css}   Shell + router
+├── app-root.ts              Shell + router; wires AlbumsService into screens
 ├── components/              Reusable UI (ll-logo, ll-rule, ll-top-nav, ll-motif, etc.)
 ├── screens/                 One folder per route (upload, albums, album-detail, story)
-├── services/                demo-data.ts (seeded albums), image-colors.ts (canvas sampling)
-└── models/                  TypeScript types — DesignSpec, Album, Photo
+├── services/
+│   ├── api-client.ts        Typed fetch wrapper for the Symfony API (6 endpoints)
+│   ├── api-mappers.ts       Convert backend wire types → frontend domain types
+│   ├── albums-service.ts    Coordinates the API client; falls back to demo on offline dev
+│   ├── demo-data.ts         Seeded albums for offline / first-run dev
+│   └── image-colors.ts      Canvas-based dominant-colour sampling
+└── models/
+    ├── types.ts             Domain types — DesignSpec, Album, Photo
+    └── api-types.ts         Wire-format types from the Symfony API
+```
+
+## Backend wiring
+
+`app-root.attached()` calls `AlbumsService.loadAlbums()`, which hits `GET /api/albums` on the Symfony backend (URL from `VITE_API_BASE_URL`). If the backend isn't reachable (e.g. you haven't started `symfony serve`), the service silently falls back to seeded demo data so the UI keeps working — `usingDemoData` flips to `true` in that case.
+
+To run with the real backend:
+
+```bash
+cp .env.example .env.local        # set VITE_API_BASE_URL to your Symfony URL
+# In another terminal: cd ../backend && symfony serve
+npm run dev
 ```
 
 ## Notes worth knowing
